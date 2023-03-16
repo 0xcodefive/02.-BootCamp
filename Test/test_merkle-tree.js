@@ -2,12 +2,12 @@ import { StandardMerkleTree } from "@openzeppelin/merkle-tree";
 import fs from "fs";
 
 const values = [
-    ["0x1111111111111111111111111111111111111111", "1000000000000000000000"],
-    ["0x2222222222222222222222222222222222222222", "1000000000000000000000"]
+    ["0x1111111111111111111111111111111111111111"],
+    ["0x2222222222222222222222222222222222222222"]
   ];
 
 async function SetMerkleRoot(val) {
-    const tree = StandardMerkleTree.of(val, ["address", "uint256"]);
+    const tree = StandardMerkleTree.of(val, ["address"]);
     console.log('Merkle Root:', tree.root);
     fs.writeFileSync("tree.json", JSON.stringify(tree.dump()));
 }
