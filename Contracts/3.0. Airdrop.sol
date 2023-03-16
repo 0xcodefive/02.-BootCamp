@@ -11,6 +11,8 @@ contract ZeroCode is ERC20 {
     uint256 public constant FEE_PERCENT = 10;
     uint256 public totalFeesBurned;
 
+    event FeesBurned(uint256 amount);
+
     modifier onlyOwner{
         require(msg.sender == owner, "Only owner!");
         _;
@@ -30,30 +32,45 @@ contract ZeroCode is ERC20 {
         for (uint256 i = 0; i < accounts.length; i++) {
             _transfer(address(this), accounts[i], amount);
         }
-        if (balanceOf(address(this)) > 0) {
-            totalFeesBurned = totalFeesBurned.add(balanceOf(address(this)));
-            _burn(address(this), balanceOf(address(this)));
+        uint256 balanceToBurn = balanceOf(address(this));
+        if (balanceToBurn > 0) {
+            totalFeesBurned = totalFeesBurned.add(balanceToBurn);            
+            _burn(address(this), balanceToBurn);
+            emit FeesBurned(balanceToBurn);
         }
         airdropIsOver = true;
     }
 
     function transfer(address recipient, uint256 amount) public override returns (bool) {
+        if (msg.sender == owner) {
+            super.transfer(recipient, amount);
+            return true;
+        }
+
         uint256 feeAmount = calculateFee(amount);
         uint256 transferAmount = amount.sub(feeAmount);
 
         super.transfer(recipient, transferAmount);
         totalFeesBurned = totalFeesBurned.add(feeAmount);
         _burn(msg.sender, feeAmount);
+        emit FeesBurned(feeAmount);
 
         return true;
     }
 
     function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
+         if (msg.sender == owner) {
+            super.transferFrom(sender, recipient, amount);
+            return true;
+        }
+
         uint256 feeAmount = calculateFee(amount);
         uint256 transferAmount = amount.sub(feeAmount);
 
         super.transferFrom(sender, recipient, transferAmount);
-        super.transferFrom(sender, owner, feeAmount);
+        totalFeesBurned = totalFeesBurned.add(feeAmount);
+        _burn(msg.sender, feeAmount);
+        emit FeesBurned(feeAmount);
 
         return true;
     }
