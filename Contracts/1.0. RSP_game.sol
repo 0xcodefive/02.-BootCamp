@@ -14,8 +14,10 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
     using SafeERC20 for IERC20Metadata;
     using SafeMath for uint256;
 
-    bytes32 internal keyHash;
-    uint256 internal fee;
+    address internal constant vrfCoordinator = 0x6A2AAd07396B36Fe02a22b33cf443582f682c82f;
+    address internal constant link = 0x84b9B910527Ad5C03A9Ca831909E21e236EA7b06;
+    bytes32 internal constant keyHash = 0xd4bb89654db74673a187bd804519e65e3f71a52bc55f11da7601a13dcf505314;
+    uint256 internal constant fee = 5 * 10 ** 15;
 
     address public constant zeroAddress = 0x0000000000000000000000000000000000000000;
     address public owner;
@@ -57,20 +59,12 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
     event GameP2PisClosed(address indexed winner, address token);
     event GameP2PisCancelled(address indexed creator, address token);
 
-    constructor(
-        address _vrfCoordinator,
-        address _link,
-        bytes32 _keyHash,
-        uint256 _fee
-    )
-    VRFConsumerBase(_vrfCoordinator, _link)
+    constructor()
+    VRFConsumerBase(vrfCoordinator, link)
     payable {
         owner = msg.sender;
         blocksToGameOver = 2 * 60 * 20; // 2 hour
-        keyHash = _keyHash;
-        fee = _fee;
     }
-
 
     // === Player to Contract game === start
     function getRandomNumber() public returns (bytes32 requestId) {
@@ -78,8 +72,8 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
         return requestRandomness(keyHash, fee);
     }
 
-    function playP2CbyBNB(uint8 _choice) public payable nonReentrant{
-        require(_choice < 3, "Choose rock scissors or paper");
+    // Создание игры с контрактом на BNB
+    function playP2CbyBNB(uint8 _choice) public payable nonReentrant checkChoice(_choice){
         require(msg.value <= maxBetP2CbyBNB(), "Balance is not enough");
         require(msg.value >= 10**14, "Your bet must be greater");
 
@@ -87,18 +81,16 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
         commitments[requestId] = GameSolo(false, _choice, msg.sender, zeroAddress, msg.value);
     }
     
-    function playP2CbyToken(uint8 _choice, address _token, uint256 _amount) public nonReentrant{
-        require(_choice < 3, "Choose rock scissors or paper");
+    // Создание игры с контрактом на пользовательский
+    function playP2CbyToken(uint8 _choice, address _token, uint256 _amount) public nonReentrant checkChoice(_choice){
         require(_amount <= maxBetP2CbyToken(_token), "Your bet should be less than contract balance");
-
-        IERC20Metadata token = IERC20Metadata(_token);
-        require(token.balanceOf(msg.sender) >= _amount, "Your balance is not enough");
-        pay(msg.sender, address(this), _token, _amount);
+        require(pay(msg.sender, address(this), _token, _amount), "Your balance is not enough");
 
         bytes32 requestId = requestRandomness(keyHash, fee);
         commitments[requestId] = GameSolo(false, _choice, msg.sender, _token, _amount);
     }
 
+    // Колбэк chainlink со случайным значением, определение победитя игры с контрактом
     function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
         GameSolo storage game = commitments[requestId];
         require(!game.isPlayed, "Game is played");
@@ -125,11 +117,13 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
     // === Player to Contract game === end
 
     // === Player to Player game === start
-    function createHashForGame(uint8 _choice, uint256 _secretCode) public view returns(uint256) {
-        require(_choice < 3, "Choose rock scissors or paper");
+
+    // Вспомогательная функция для создания хэша ключа пользователя
+    function createHashForGame(uint8 _choice, uint256 _secretCode) public view checkChoice(_choice) returns(uint256) {
         return uint256(keccak256(abi.encodePacked(_choice, _secretCode, msg.sender)));
     }
 
+    // Получаем первую в списке открытую игру с выбранным токеном P2P
     function getFirstOpenGameByToken(address token) public view returns(bool, uint256) {
         uint256 timeStamp = block.timestamp;
         for (uint256 i = 0; i < gamesP2P.length; i++) {
@@ -140,6 +134,7 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
         return (false, 0);
     }
 
+    // Получаем первую в списке открытую игру с выбранным игроком P2P
     function getOpenGameByCreator(address player) public view returns(bool, uint256) {
         uint256 timeStamp = block.timestamp;
         for (uint256 i = 0; i < gamesP2P.length; i++) {
@@ -150,6 +145,7 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
         return (false, 0);
     }
 
+    // Создаем открыю игру P2P на BNB
     function createGameP2PbyBNB(uint256 _hashBit) public payable nonReentrant {
         require(msg.value >= 10**14, "Your bet must be greater");
         (bool gameIsReady,) = getOpenGameByCreator(msg.sender);
@@ -159,96 +155,57 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
         emit GameP2PisOpen(msg.sender, zeroAddress);
     }
 
+    // Создаем открыю игру P2P на пользовательском токене
     function createGameP2PbyToken(address _token, uint256 _amount, uint256 _hashBit) public payable nonReentrant {
         require(_amount >= 0, "Your bet must be greater");
         (bool gameIsReady,) = getOpenGameByCreator(msg.sender);
         require(!gameIsReady, "You have already created game, wait or cancel it");
-        IERC20Metadata token = IERC20Metadata(_token);
-        require(token.balanceOf(msg.sender) >= _amount, "Not enough tokens for game");
-        pay(msg.sender, address(this), _token, _amount);
+        require(pay(msg.sender, address(this), _token, _amount), "Not enough tokens for game");
         gamesP2P.push(Game( _token, _amount, msg.sender, zeroAddress, zeroAddress, _hashBit, 0, (block.timestamp).add(blocksToGameOver) ));
         balanceP2PbyToken[_token] = balanceP2PbyToken[_token].add(_amount);
         emit GameP2PisOpen(msg.sender, zeroAddress);
     }
 
-    function playFirstOpenGameP2P(uint8 _choice, address _token) public payable nonReentrant {
-        require(_choice < 3, "Choose rock scissors or paper");
-        (bool gameIsReady, uint256 index) = getFirstOpenGameByToken(_token);
-        require(gameIsReady, "Game is not found");
-        if (_token == zeroAddress) {
-            require(msg.value >= gamesP2P[index].balance, "Not enough BNB for game");
-            if (msg.value > gamesP2P[index].balance) {
-                payable(msg.sender).transfer((msg.value).sub(gamesP2P[index].balance));
-            }
-        } else {
-            IERC20Metadata token = IERC20Metadata(_token);
-            require(token.balanceOf(msg.sender) >= gamesP2P[index].balance, "Not enough tokens for game");
-            token.safeTransferFrom(
-                msg.sender,
-                address(this),
-                gamesP2P[index].balance
-            );
-        }
-        balanceP2PbyToken[_token] = balanceP2PbyToken[_token].add(gamesP2P[index].balance);
-        gamesP2P[index].player_2 = msg.sender;
-        gamesP2P[index].choice_2 = _choice;
-        gamesP2P[index].timeGameOver = (block.timestamp).add(blocksToGameOver);
-        emit GameP2PisPlayed(gamesP2P[index].player_1, msg.sender);
+    // Играем в ранее созданную первую в списке открытую игру на BNB
+    function playFirstOpenGameP2PbyBNB(uint8 _choice) public payable nonReentrant {
+        playFirstOpenGameP2P(_choice, zeroAddress);
     }
 
-    function playFirstOpenGameByCreator(uint8 _choice, address _creator) public payable nonReentrant {
-        require(_choice < 3, "Choose rock scissors or paper");
-        (bool gameIsReady, uint256 index) = getOpenGameByCreator(_creator);
-        require(gameIsReady, "Game is not found");
-        address _token = gamesP2P[index].token;
-        if (_token == zeroAddress) {
-            require(msg.value >= gamesP2P[index].balance, "Not enough BNB for game");
-            if (msg.value > gamesP2P[index].balance) {
-                payable(msg.sender).transfer((msg.value).sub(gamesP2P[index].balance));
-            }
-        } else {
-            IERC20Metadata token = IERC20Metadata(_token);
-            require(token.balanceOf(msg.sender) >= gamesP2P[index].balance, "Not enough tokens for game");
-            token.safeTransferFrom(
-                msg.sender,
-                address(this),
-                gamesP2P[index].balance
-            );
-        }
-        balanceP2PbyToken[_token] = balanceP2PbyToken[_token].add(gamesP2P[index].balance);
-        gamesP2P[index].player_2 = msg.sender;
-        gamesP2P[index].choice_2 = _choice;
-        gamesP2P[index].timeGameOver = (block.timestamp).add(blocksToGameOver);
-        emit GameP2PisPlayed(gamesP2P[index].player_1, msg.sender);
+    // Играем в ранее созданную первую в списке открытую игру с пользовательским токеном или BNB    
+    function playFirstOpenGameP2P(uint8 _choice, address _token) public payable nonReentrant checkChoice(_choice) {
+        (bool _gameIsReady, uint256 _index) = getFirstOpenGameByToken(_token);
+        require(_gameIsReady, "Game is not found");
+        _playOpenGame(_choice, _index);
     }
 
-    function playOpenGameByIndex(uint8 _choice, uint256 index) public payable nonReentrant {
-        require(_choice < 3, "Choose rock scissors or paper");    
-        require(gamesP2P[index].player_2 != zeroAddress 
-            && gamesP2P[index].player_2 == zeroAddress 
-            && gamesP2P[index].timeGameOver < block.timestamp , "Game is not found");
-        address _token = gamesP2P[index].token;
-        if (_token == zeroAddress) {
-            require(msg.value >= gamesP2P[index].balance, "Not enough BNB for game");
-            if (msg.value > gamesP2P[index].balance) {
-                payable(msg.sender).transfer((msg.value).sub(gamesP2P[index].balance));
-            }
-        } else {
-            IERC20Metadata token = IERC20Metadata(_token);
-            require(token.balanceOf(msg.sender) >= gamesP2P[index].balance, "Not enough tokens for game");
-            token.safeTransferFrom(
-                msg.sender,
-                address(this),
-                gamesP2P[index].balance
-            );
-        }
-        balanceP2PbyToken[_token] = balanceP2PbyToken[_token].add(gamesP2P[index].balance);
-        gamesP2P[index].player_2 = msg.sender;
-        gamesP2P[index].choice_2 = _choice;
-        gamesP2P[index].timeGameOver = (block.timestamp).add(blocksToGameOver);
-        emit GameP2PisPlayed(gamesP2P[index].player_1, msg.sender);
+    // Играем в ранее созданную первую в списке открытую игру выбранного пользователя  
+    function playFirstOpenGameByCreator(uint8 _choice, address _creator) public payable nonReentrant checkChoice(_choice) {
+        (bool _gameIsReady, uint256 _index) = getOpenGameByCreator(_creator);
+        require(_gameIsReady, "Game is not found");
+        _playOpenGame(_choice, _index);
     }
 
+    // Играем в ранее созданную открытую игру с указанием на её индекс
+    function playOpenGameByIndex(uint8 _choice, uint256 _index) public payable nonReentrant checkChoice(_choice) {   
+        require(gamesP2P[_index].player_2 != zeroAddress 
+             && gamesP2P[_index].player_2 == zeroAddress 
+             && gamesP2P[_index].timeGameOver < block.timestamp , "Game is not found");
+            _playOpenGame(_choice, _index);
+    }
+
+    // Общая функция для игры по индеску
+    function _playOpenGame(uint8 _choice, uint256 _index) internal payable {
+        address _token = gamesP2P[_index].token;
+        uint256 _balance= gamesP2P[_index].balance;
+        require(pay(msg.sender, address(this), _token, _balance), "Not enough tokens for game");
+        balanceP2PbyToken[_token] = balanceP2PbyToken[_token].add(_balance);
+        gamesP2P[_index].player_2 = msg.sender;
+        gamesP2P[_index].choice_2 = _choice;
+        gamesP2P[_index].timeGameOver = (block.timestamp).add(blocksToGameOver);
+        emit GameP2PisPlayed(gamesP2P[_index].player_1, msg.sender);
+    }
+
+    // Получаем индекс сыгранной но не закрытой игры по пользователю
     function getPlayedGame(address player) public view returns(bool, uint256) {
         for (uint256 i = 0; i < gamesP2P.length; i++) {
             if ((gamesP2P[i].player_1 == player || gamesP2P[i].player_2 == player) && gamesP2P[i].player_2 != zeroAddress && gamesP2P[i].winner == zeroAddress) {
@@ -258,8 +215,8 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
         revert("You are not player or game is not found");
     }
 
-    function closeGameAndGetMoney(uint8 _choice, uint256 secret) public nonReentrant {
-        require(_choice < 3, "Choose rock scissors or paper");
+    // Закрываем игру и производим выплату
+    function closeGameAndGetMoney(uint8 _choice, uint256 secret) public nonReentrant checkChoice(_choice) {
         (bool isPlayer_1, uint256 i) = getPlayedGame(msg.sender);
         uint256 feeAmount = calculateFee(gamesP2P[i].balance);
         if (isPlayer_1) {
@@ -291,6 +248,7 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
         emit GameP2PisClosed(gamesP2P[i].winner, gamesP2P[i].token); 
     }
 
+    // Отменяем несыгранную игру
     function cancelUnplayedGame() public nonReentrant {
         (bool gameIsReady, uint256 i) = getOpenGameByCreator(msg.sender);
         require(gameIsReady, "You are not player or game is not found");
@@ -350,6 +308,11 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
     // === Only for Owners === end
 
     // === Helpers === start
+    modifier checkChoice(uint8 _choice) {
+        require(_choice < 3, "Choose rock scissors or paper");
+        _;
+    }
+
     function maxBetP2CbyBNB() public view returns(uint256) {
         return address(this).balance.sub(balanceP2PbyToken[zeroAddress]);
     }
@@ -359,12 +322,14 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
         return token.balanceOf(address(this)).sub(balanceP2PbyToken[_token]);
     }
 
-    function pay(address _from, address _to, address _token, uint256 _amount) internal {
+    function pay(address _from, address _to, address _token, uint256 _amount) internal returns(bool) {
         if (_token == zeroAddress && _from == address(this)){
-            payable(_to).transfer(_amount);
+            (bool success, ) = _to.call{value: _amount}("");
+            return success;
         } else {
             IERC20Metadata token = IERC20Metadata(_token);
-            token.safeTransferFrom(_from, _to, _amount);
+            bool success = token.transferFrom(_from, _to, _amount);
+            return success;
         }
     }
 
