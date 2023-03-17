@@ -9,10 +9,9 @@
 *      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝     *
 *                                                            *
 \************************************************************/                                                  
+// VRFv2Consumer address 0xcBa1F3cfDe49DA14303b86FE9123E760859c01f5
 
 pragma solidity ^0.8.7;
-
-// VRFv2Consumer address 0xcBa1F3cfDe49DA14303b86FE9123E760859c01f5
 
 import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -205,7 +204,7 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
     }
 
     // Общая функция для игры по индеску
-    function _playOpenGame(uint8 _choice, uint256 _index) internal payable {
+    function _playOpenGame(uint8 _choice, uint256 _index) internal {
         address _token = gamesP2P[_index].token;
         uint256 _balance= gamesP2P[_index].balance;
         require(pay(msg.sender, address(this), _token, _balance), "Not enough tokens for game");
