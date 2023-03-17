@@ -41,7 +41,6 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
 
     uint256 public FEEbyBet = 100; // 1 of 1000000 by bet;
     uint256 public blocksToGameOver;
-    uint256 public randomResult;
 
     struct GameSolo {
         bool isPlayed;
@@ -84,11 +83,6 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
         );
         superUser = msg.sender;
         blocksToGameOver = 2 * 60 * 20; // 2 hour
-    }
-    
-    modifier onlySuperUser{
-        require(msg.sender == superUser, "You are not owner!");
-        _;
     }
     
     modifier checkChoice(uint8 _choice) {
@@ -307,7 +301,7 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
         uint32 _callbackGasLimit,
         uint32 _numWords,
         uint64 _s_subscriptionId
-        ) public onlySuperUser {
+        ) public onlyOwner {
             require(_requestConfirmations > 0, "Bad requestConfirmations");
             require(_callbackGasLimit > 0, "Bad callbackGasLimit");
             require(_numWords > 0, "Bad numWords");
@@ -318,32 +312,32 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
             s_subscriptionId = _s_subscriptionId;
     }
 
-    function setFee(uint256 _fee) public onlySuperUser {
+    function setFee(uint256 _fee) public onlyOwner {
         emit FeeChanged (FEEbyBet, _fee, msg.sender);
         FEEbyBet = _fee;
     }
 
-    function setNftContractForFreeFee(address _address) public onlySuperUser {
+    function setNftContractForFreeFee(address _address) public onlyOwner {
         emit NftContractChanged(nftContractForFreeFee, _address, msg.sender);
         nftContractForFreeFee = _address;
     }
 
-    function setBlocksToGameOver(uint256 blocks) public onlySuperUser {
+    function setBlocksToGameOver(uint256 blocks) public onlyOwner {
         blocksToGameOver = blocks;
     }
 
-    function transferOwner (address newAddress) public onlySuperUser {
+    function transferOwner (address newAddress) public onlyOwner {
         require(!isContract(newAddress), "Contract cannot be the SuperUser");
         emit TransferedOwnership(msg.sender, newAddress);
     }
 
-    function withdraw() public onlySuperUser {
+    function withdraw() public onlyOwner {
         require(address(this).balance > balanceP2PbyToken[zeroAddress], "Balance is too small for withdrawal");
         uint256 amountToWithdraw = (address(this).balance).sub(balanceP2PbyToken[zeroAddress]);
         pay(address(this), msg.sender, zeroAddress, amountToWithdraw);
     }
 
-    function withdrawTokens(address _token) external onlySuperUser nonReentrant {
+    function withdrawTokens(address _token) external onlyOwner nonReentrant {
         IERC20Metadata token = IERC20Metadata(_token);
         require(token.balanceOf(address(this)) > balanceP2PbyToken[_token], "Balance is too small for withdrawal");
         uint256 amountToWithdraw = (token.balanceOf(address(this)).sub(balanceP2PbyToken[_token]));
