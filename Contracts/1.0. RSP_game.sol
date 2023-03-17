@@ -9,28 +9,34 @@
 *      ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝     *
 *                                                            *
 \************************************************************/                                                  
-// VRFv2Consumer address 0xcBa1F3cfDe49DA14303b86FE9123E760859c01f5
 
-pragma solidity ^0.8.7;
+pragma solidity ^0.8.0;
 
-import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
+import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
+import "@chainlink/contracts/src/v0.8/ConfirmedOwner.sol";
+
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-contract RSP_game is ReentrancyGuard, VRFConsumerBase {
+contract RSP_game is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
     using SafeERC20 for IERC20Metadata;
     using SafeMath for uint256;
 
+    VRFCoordinatorV2Interface COORDINATOR;
+
+    uint16 internal requestConfirmations = 2;
+    uint32 internal callbackGasLimit = 200000;
+    uint32 internal numWords = 1;
+    uint64 internal s_subscriptionId = 2714;
     address internal constant vrfCoordinator = 0x6A2AAd07396B36Fe02a22b33cf443582f682c82f;
-    address internal constant link = 0x84b9B910527Ad5C03A9Ca831909E21e236EA7b06;
     bytes32 internal constant keyHash = 0xd4bb89654db74673a187bd804519e65e3f71a52bc55f11da7601a13dcf505314;
-    uint256 internal constant fee = 5 * 10 ** 15;
 
     address public constant zeroAddress = 0x0000000000000000000000000000000000000000;
-    address public owner;
+    address public superUser;
     address public nftContractForFreeFee;
 
     uint256 public FEEbyBet = 100; // 1 of 1000000 by bet;
@@ -44,7 +50,7 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
         address token;
         uint256 balance;
     }
-    mapping(bytes32 => GameSolo) private commitments;
+    mapping(uint256 => GameSolo) private commitments;
     mapping(address => uint256) public balanceP2PbyToken;
 
     struct Game {
@@ -70,24 +76,40 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
     event GameP2PisCancelled(address indexed creator, address token);
 
     constructor()
-    VRFConsumerBase(vrfCoordinator, link)
+    VRFConsumerBaseV2(vrfCoordinator)
+    ConfirmedOwner(msg.sender)
     payable {
-        owner = msg.sender;
+        COORDINATOR = VRFCoordinatorV2Interface(
+            vrfCoordinator
+        );
+        superUser = msg.sender;
         blocksToGameOver = 2 * 60 * 20; // 2 hour
+    }
+    
+    modifier onlySuperUser{
+        require(msg.sender == superUser, "You are not owner!");
+        _;
+    }
+    
+    modifier checkChoice(uint8 _choice) {
+        require(_choice < 3, "Choose rock scissors or paper");
+        _;
     }
 
     // === Player to Contract game === start
-    function getRandomNumber() public returns (bytes32 requestId) {
-        require(LINK.balanceOf(address(this)) >= fee, "Not enough LINK");
-        return requestRandomness(keyHash, fee);
-    }
 
     // Создание игры с контрактом на BNB
     function playP2CbyBNB(uint8 _choice) public payable nonReentrant checkChoice(_choice){
         require(msg.value <= maxBetP2CbyBNB(), "Balance is not enough");
         require(msg.value >= 10**14, "Your bet must be greater");
 
-        bytes32 requestId = requestRandomness(keyHash, fee);
+        uint256 requestId = COORDINATOR.requestRandomWords(
+            keyHash,
+            s_subscriptionId,
+            requestConfirmations,
+            callbackGasLimit,
+            numWords
+        );
         commitments[requestId] = GameSolo(false, _choice, msg.sender, zeroAddress, msg.value);
     }
     
@@ -96,16 +118,22 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
         require(_amount <= maxBetP2CbyToken(_token), "Your bet should be less than contract balance");
         require(pay(msg.sender, address(this), _token, _amount), "Your balance is not enough");
 
-        bytes32 requestId = requestRandomness(keyHash, fee);
+        uint256 requestId = COORDINATOR.requestRandomWords(
+            keyHash,
+            s_subscriptionId,
+            requestConfirmations,
+            callbackGasLimit,
+            numWords
+        );
         commitments[requestId] = GameSolo(false, _choice, msg.sender, _token, _amount);
     }
 
     // Колбэк chainlink со случайным значением, определение победитя игры с контрактом
-    function fulfillRandomness(bytes32 requestId, uint256 randomness) internal override {
-        GameSolo storage game = commitments[requestId];
+    function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords) internal override {
+        GameSolo storage game = commitments[_requestId];
         require(!game.isPlayed, "Game is played");
         game.isPlayed = true;
-        uint8 contractChoice = uint8(randomness % 3);
+        uint8 contractChoice = uint8(_randomWords[0] % 3);
         string memory result;
 
         uint256 feeAmount = calculateFee(msg.value);
@@ -272,57 +300,58 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
     }
     // === Player to Player game === end
 
-    // === Only for Owners === start
-    modifier onlyOwner{
-        require(msg.sender == owner, "You are not owner!");
-        _;
-    }
+    // === Only for SuperUser === start
     
-    function setFee(uint256 _fee) public onlyOwner {
-        emit FeeChanged (FEEbyBet, _fee, msg.sender);
-        FEEbyBet = fee;
+    function setNewOptionsForVRF(
+        uint16 _requestConfirmations, 
+        uint32 _callbackGasLimit,
+        uint32 _numWords,
+        uint64 _s_subscriptionId
+        ) public onlySuperUser {
+            require(_requestConfirmations > 0, "Bad requestConfirmations");
+            require(_callbackGasLimit > 0, "Bad callbackGasLimit");
+            require(_numWords > 0, "Bad numWords");
+            require(_s_subscriptionId > 0, "Bad s_subscriptionId");
+            requestConfirmations = _requestConfirmations;
+            callbackGasLimit = _callbackGasLimit;
+            numWords = _numWords;
+            s_subscriptionId = _s_subscriptionId;
     }
 
-    function setNftContractForFreeFee(address _address) public onlyOwner {
+    function setFee(uint256 _fee) public onlySuperUser {
+        emit FeeChanged (FEEbyBet, _fee, msg.sender);
+        FEEbyBet = _fee;
+    }
+
+    function setNftContractForFreeFee(address _address) public onlySuperUser {
         emit NftContractChanged(nftContractForFreeFee, _address, msg.sender);
         nftContractForFreeFee = _address;
     }
 
-    function setBlocksToGameOver(uint256 blocks) public onlyOwner {
+    function setBlocksToGameOver(uint256 blocks) public onlySuperUser {
         blocksToGameOver = blocks;
     }
 
-    function isContract(address addr) internal view returns (bool) {
-        uint size;
-        assembly { size := extcodesize(addr) }
-        return size > 0;
-    }
-
-    function transferOwnership (address newAddress) public onlyOwner {
-        require(!isContract(newAddress), "Contract cannot be the owner");
+    function transferOwner (address newAddress) public onlySuperUser {
+        require(!isContract(newAddress), "Contract cannot be the SuperUser");
         emit TransferedOwnership(msg.sender, newAddress);
     }
 
-    function withdraw() public onlyOwner {
+    function withdraw() public onlySuperUser {
         require(address(this).balance > balanceP2PbyToken[zeroAddress], "Balance is too small for withdrawal");
         uint256 amountToWithdraw = (address(this).balance).sub(balanceP2PbyToken[zeroAddress]);
         pay(address(this), msg.sender, zeroAddress, amountToWithdraw);
     }
 
-    function withdrawTokens(address _token) external onlyOwner nonReentrant {
+    function withdrawTokens(address _token) external onlySuperUser nonReentrant {
         IERC20Metadata token = IERC20Metadata(_token);
         require(token.balanceOf(address(this)) > balanceP2PbyToken[_token], "Balance is too small for withdrawal");
         uint256 amountToWithdraw = (token.balanceOf(address(this)).sub(balanceP2PbyToken[_token]));
         pay(address(this), msg.sender, _token, amountToWithdraw);
     }
-    // === Only for Owners === end
+    // === Only for SuperUser === end
 
     // === Helpers === start
-    modifier checkChoice(uint8 _choice) {
-        require(_choice < 3, "Choose rock scissors or paper");
-        _;
-    }
-
     function maxBetP2CbyBNB() public view returns(uint256) {
         return address(this).balance.sub(balanceP2PbyToken[zeroAddress]);
     }
@@ -345,6 +374,12 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBase {
 
     function calculateFee(uint256 amount) public view returns (uint256) {
         return IERC721(nftContractForFreeFee).balanceOf(msg.sender) > 0 ? 0 : amount.mul(FEEbyBet).div(1000000);
+    }
+    
+    function isContract(address addr) internal view returns (bool) {
+        uint size;
+        assembly { size := extcodesize(addr) }
+        return size > 0;
     }
     // === Helpers === end
 
