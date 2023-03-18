@@ -72,4 +72,8 @@ contract ZeroCode is ERC20 {
     function calculateFee(uint256 amount) public pure returns (uint256) {
         return amount.mul(FEE_PERCENT).div(100);
     }
+
+    function transferOwner(address _newOwner) public onlyOwner {
+        owner = _newOwner;
+    }
 }
