@@ -36,7 +36,6 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
     bytes32 internal constant keyHash = 0xd4bb89654db74673a187bd804519e65e3f71a52bc55f11da7601a13dcf505314;
 
     address public constant zeroAddress = 0x0000000000000000000000000000000000000000;
-    address public superUser;
     address public nftContractForFreeFee;
 
     uint256 public FEEbyBet = 100; // 1 of 1000000 by bet;
@@ -81,7 +80,6 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
         COORDINATOR = VRFCoordinatorV2Interface(
             vrfCoordinator
         );
-        superUser = msg.sender;
         blocksToGameOver = 2 * 60 * 20; // 2 hour
     }
     

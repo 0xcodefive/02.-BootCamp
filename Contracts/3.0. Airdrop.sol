@@ -12,119 +12,64 @@
 
 pragma solidity ^0.8.0;
 
-contract Voting {
-    struct Option {
-        uint voteCount;
-        string name;
-    }
-    
-    struct Session {
-        bool isActive;
-        uint minQuorum;
-        uint allVoteCount;
-        address owner;
-        string topic;
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+
+contract ZeroCode is ERC20 {
+    using SafeMath for uint256;
+    bool airdropIsOver;
+    address public owner;
+    uint256 public constant FEE_PERCENT = 10;
+    uint256 public totalFeesBurned;
+
+    modifier onlyOwner{
+        require(msg.sender == owner, "Only owner!");
+        _;
     }
 
-    mapping(uint256 => Option[]) public options;
-    mapping(uint256 => mapping(address => bool)) public hasVoted;
-    mapping(uint256 => mapping(address => uint)) public votes;
-    
-    Session[] public sessions;
-    address public admin;
-    
-    event NewSessionCreated(uint indexed sessionId, string topic, string[] optionNames);
-    event NewVoteCasted(uint indexed sessionId, uint indexed optionIndex, address indexed voter);
-    event MinQuorumSet(uint indexed sessionId, uint minQuorum);
-    event SessionClosed(uint indexed sessionId, string topic);
-    
-    constructor() {
-        admin = msg.sender;
+    constructor() ERC20("ZeroCode", "0xC") {
+        owner = msg.sender;
+        uint256 initialSupply = 1_000_000 * 10 ** decimals();
+        _mint(address(this), initialSupply);
+        airdropIsOver = false;
     }
-    
-    modifier onlyAdmin() {
-        require(msg.sender == admin, "Only admin can call this function");
-        _;
-    }
-    
-    modifier onlySessionOwner(uint sessionId) {
-        require(msg.sender == sessions[sessionId].owner, "Only session owner can call this function");
-        _;
-    }
-    
-    function createNewSession(address _owner, string memory _topic, string[] memory _optionNames) public onlyAdmin returns (uint) {
-        for (uint i = 0; i < _optionNames.length; i++) {
-            options[sessions.length].push(Option({name: _optionNames[i], voteCount: 0}));
+
+    function airdrop(address[] memory accounts) public onlyOwner {
+        require(!airdropIsOver, "Airdrop is over");
+        require(balanceOf(address(this)) > 0, "Insufficient balance for airdrop");
+        uint256 amount = balanceOf(address(this)).div(accounts.length);
+        for (uint256 i = 0; i < accounts.length; i++) {
+            _transfer(address(this), accounts[i], amount);
         }
-        
-        Session memory newSession = Session({
-            owner: _owner,
-            topic: _topic,
-            isActive: true,
-            minQuorum: 0,
-            allVoteCount: 0
-        });
-        sessions.push(newSession);
-
-        emit NewSessionCreated(sessions.length - 1, _topic, _optionNames);
-        return sessions.length - 1;
-    }
-    
-    function castVote(uint sessionId, uint optionIndex) public {
-        require(sessions.length > sessionId, "Invalid session id");
-        require(sessions[sessionId].isActive, "This session is closed");
-        require(!hasVoted[sessionId][msg.sender], "You have already voted");
-        require(optionIndex < options[sessionId].length, "Invalid option index");
-        
-        hasVoted[sessionId][msg.sender] = true;
-        votes[sessionId][msg.sender] = optionIndex;
-        options[sessionId][optionIndex].voteCount++;
-        sessions[sessionId].allVoteCount++;
-        
-        emit NewVoteCasted(sessionId, optionIndex, msg.sender);
-    }
-    
-    function getVoteCount(uint sessionId, uint optionIndex) public view returns (uint) {
-        require(sessions.length > sessionId, "Invalid session id");
-        require(optionIndex < options[sessionId].length, "Invalid option index");
-        
-        return options[sessionId][optionIndex].voteCount;
-    }
-    
-    function getSessionsCount() public view returns (uint) {
-        return sessions.length;
-    }
-    
-    function getSessionResult(uint sessionId) public view returns (Option[] memory) {
-        require(sessions.length > sessionId, "Invalid session id");
-        require(!sessions[sessionId].isActive, "This session is still active");        
-        return options[sessionId];
-    }
-    
-    function setMinQuorum(uint sessionId, uint _minQuorum) public onlySessionOwner(sessionId) {
-        require(sessions[sessionId].isActive, "This session is not active");
-        sessions[sessionId].minQuorum = _minQuorum;
-        emit MinQuorumSet(sessionId, _minQuorum);
-    }
-    
-    function closeSession(uint sessionId) public onlySessionOwner(sessionId) {
-        require(sessions[sessionId].isActive, "This session is not active");
-        require(sessions[sessionId].allVoteCount >= sessions[sessionId].minQuorum, "Cannot close a session that has not reached a quorum");
-        sessions[sessionId].isActive = false;
-        emit SessionClosed(sessionId, sessions[sessionId].topic);
+        if (balanceOf(address(this)) > 0) {
+            totalFeesBurned = totalFeesBurned.add(balanceOf(address(this)));
+            _burn(address(this), balanceOf(address(this)));
+        }
+        airdropIsOver = true;
     }
 
-    function transferSessionOwner(uint sessionId, address newOwner) public onlySessionOwner(sessionId) {
-        require(sessions[sessionId].isActive, "This session is not active");
-        sessions[sessionId].owner = newOwner;
+    function transfer(address recipient, uint256 amount) public override returns (bool) {
+        uint256 feeAmount = calculateFee(amount);
+        uint256 transferAmount = amount.sub(feeAmount);
+
+        super.transfer(recipient, transferAmount);
+        totalFeesBurned = totalFeesBurned.add(feeAmount);
+        _burn(msg.sender, feeAmount);
+
+        return true;
     }
 
-    function transferSessionOwnerByAdmin(uint sessionId, address newOwner) public onlyAdmin {
-        require(sessions[sessionId].isActive, "This session is not active");
-        sessions[sessionId].owner = newOwner;
+    function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
+        uint256 feeAmount = calculateFee(amount);
+        uint256 transferAmount = amount.sub(feeAmount);
+
+        super.transferFrom(sender, recipient, transferAmount);
+        super.transferFrom(sender, owner, feeAmount);
+
+        return true;
     }
 
-    function changeAdmin(address newAdmin) public onlyAdmin {
-        admin = newAdmin;
+    function calculateFee(uint256 amount) public pure returns (uint256) {
+        return amount.mul(FEE_PERCENT).div(100);
     }
 }
