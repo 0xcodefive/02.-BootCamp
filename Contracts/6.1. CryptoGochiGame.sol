@@ -23,7 +23,6 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 interface ICryptoGochiToken {
     function mint(address _to, uint256 _amount)external;
-    function burn(address _from, uint256 _amount)external;
 }
 
 contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
@@ -88,7 +87,7 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
     }
 
     function birthGochi(address _to) internal {
-        gochiToken.burn(_to, priceToBirth);
+        IERC20Metadata(gochiTokenAddress)._burn(msg.sender, priceToBirth);
         gochies.push(Gochi({
             level: 0,
             epoch: 0,
