@@ -74,13 +74,13 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
     event GameP2PisCancelled(address indexed creator, address token);
 
     constructor()
-    VRFConsumerBaseV2(vrfCoordinator)
+    VRFConsumerBaseV2(0x6A2AAd07396B36Fe02a22b33cf443582f682c82f)
     ConfirmedOwner(msg.sender)
     payable {
         COORDINATOR = VRFCoordinatorV2Interface(
-            vrfCoordinator
+            0x6A2AAd07396B36Fe02a22b33cf443582f682c82f
         );
-        blocksToGameOver = 2 * 60 * 20; // 2 hour
+        blocksToGameOver = 10 * 20; // 1 hour
     }
     
     modifier checkChoice(uint8 _choice) {
