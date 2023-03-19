@@ -13,7 +13,6 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 contract Voting {
     enum Types {
@@ -71,7 +70,7 @@ contract Voting {
     }
 
     function createNewSessionBySBT(address _owner, address addrSBT, string memory _topic, string[] memory _optionNames) public onlyAdmin returns (uint) {
-        require(IERC721(contractAddress).supportsInterface(0x80ac58cd), "Specified address SBT is not valid");
+        require(IERC721(addrSBT).supportsInterface(0x80ac58cd), "Specified address SBT is not valid");
         uint number = createNewSession(_owner, addrSBT, _topic, _optionNames);
         emit NewSessionCreated(sessions.length - 1, Types.bySBT, _topic, _optionNames);
         return number;
@@ -88,7 +87,7 @@ contract Voting {
             isActive: true,
             minQuorum: 0,
             allVoteCount: 0,
-            typeOf: 0,            
+            typeOf: address(this) == _addrForVote ? Types.simple : Types.bySBT,            
             addrForVote: _addrForVote
         });
         sessions.push(newSession);
@@ -102,7 +101,7 @@ contract Voting {
         
         if (sessions[sessionId].typeOf == Types.bySBT) {
             require(IERC721(sessions[sessionId].addrForVote).balanceOf(msg.sender) > 0, "No voting rights");            
-            uint256 tokenIndex = IERC721(sessions[sessionId].addrForVote).tokenOfOwnerByIndex(msg.sender, 0);
+            uint256 tokenIndex = IERC721Enumerable(sessions[sessionId].addrForVote).tokenOfOwnerByIndex(msg.sender, 0);
             require(!hasVotedBySBT[sessionId][tokenIndex], "Your token have already voted");
             hasVotedBySBT[sessionId][tokenIndex] = true;
             votesBySBT[sessionId][tokenIndex] = optionIndex;
