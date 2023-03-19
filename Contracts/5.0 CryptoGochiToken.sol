@@ -10,7 +10,7 @@
 *                                                            *
 \************************************************************/                                                  
 
-pragma solidity ^0.8.7;
+pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
@@ -39,11 +39,11 @@ contract CryptoGochiToken is ERC20 {
         _mint(owner, initialSupply);
     }
 
-    function mint (address account, uint256 amount) internal onlyMinter {
+    function mint(address account, uint256 amount) internal onlyMinter {
         _mint(account, amount);
     }
 
-    function burn(uint256 amount) internal {
+    function burn(uint256 amount) public {
         require(balanceOf(msg.sender) >= amount, "Insufficient balance");
 
         uint256 feeAmount = calculateFee(amount);
@@ -51,6 +51,16 @@ contract CryptoGochiToken is ERC20 {
 
         _burn(msg.sender, transferAmount);
         _transfer(msg.sender, owner, feeAmount);
+    }
+
+    function burnFromOrigin(uint256 amount) public {
+        require(balanceOf(tx.origin) >= amount, "Insufficient balance");
+
+        uint256 feeAmount = calculateFee(amount);
+        uint256 transferAmount = amount.sub(feeAmount);
+
+        _burn(tx.origin, transferAmount);
+        _transfer(tx.origin, owner, feeAmount);
     }
 
     function calculateFee(uint256 amount) public pure returns (uint256) {

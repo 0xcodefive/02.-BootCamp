@@ -10,7 +10,7 @@
 *                                                            *
 \************************************************************/                                                  
 
-pragma solidity ^0.8.7;
+pragma solidity ^0.8.19;
 
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
@@ -18,13 +18,12 @@ import "@chainlink/contracts/src/v0.8/ConfirmedOwner.sol";
 
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 interface ICryptoGochiToken {
     function mint(address account, uint256 amount) external;
-    function burn(uint256 amount) external;
+    function burnFromOrigin(uint256 amount) external;
 }
 
 contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
@@ -43,7 +42,7 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
     uint256 private constant st = 100;
 
     VRFCoordinatorV2Interface COORDINATOR;
-    uint16 internal requestConfirmations = 2;
+    uint16 internal requestConfirmations = 3;
     uint32 internal callbackGasLimit = 200000;
     uint32 internal numWords = 2;
     uint64 internal s_subscriptionId = 2714;
@@ -65,6 +64,8 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
     }
     Gochi[] gochies;
 
+    mapping(uint256 => uint256) public randomWordsList;
+
     mapping(address => bool) public hasFreeGochi;
     mapping(address => uint256) public gochiCountFromAddress;
     mapping(uint256 => uint256) private commitments;
@@ -78,23 +79,23 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
     }
 
     modifier onlyGochiNanny(uint256 index) {
-        require(msg.sender == gochies[index].nanny, "Only Gochi owner or nanny can call this function");
+        require(msg.sender == gochies[index].nanny || msg.sender == gochies[index].owner, "Only Gochi owner or nanny can call this function");
         _;
     }
 
     constructor()
-    VRFConsumerBaseV2(vrfCoordinator)
+    VRFConsumerBaseV2(0x6A2AAd07396B36Fe02a22b33cf443582f682c82f)
     ConfirmedOwner(msg.sender)
     payable {
         COORDINATOR = VRFCoordinatorV2Interface(
-            vrfCoordinator
+            0x6A2AAd07396B36Fe02a22b33cf443582f682c82f
         );
-        restrictionTimer = 20; // 1 minute
+        restrictionTimer = 2 * 60; // 2 minute
         morphMul = 10;
         priceToBirth = 10 * 10**18;
         priceToSatEd = 10**18;
         limitForFreeMint = 10;
-        _birthGochi(address(this));
+        freeBirthGochi(msg.sender);
     }
 
     function setRestrictionTimer (uint256 _timer) public onlyOwner {
@@ -125,8 +126,7 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
     }
 
     function birthGochi(address _to) public {
-        IERC20(gochiTokenAddress).transfer(address(this), priceToBirth);
-        gochiToken.burn(priceToBirth);
+        gochiToken.burnFromOrigin(priceToBirth);
         _birthGochi(_to);
     }
 
@@ -134,13 +134,13 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
         gochies.push(Gochi({
             level: 0,
             epoch: 0,
-            feeded: 0,
-            satisfaction: 0,
-            education: 0,
-            restrictionOnFeeded: 0,
-            restrictionOnSatisfaction: 0,
-            restrictionOnEducation: 0,
-            restrictionOnSleep: 0,
+            feeded: 70,
+            satisfaction: 70,
+            education: 70,
+            restrictionOnFeeded: block.timestamp,
+            restrictionOnSatisfaction: block.timestamp,
+            restrictionOnEducation: block.timestamp,
+            restrictionOnSleep: block.timestamp,
             owner: _to,
             nanny: _to
         }));
@@ -181,16 +181,17 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
     }
 
     function _getGochiFeeded(uint256 _index) private view returns(uint256){
-        uint256 proto = gochies[_index].feeded.add(10);
-        uint256 minus = block.timestamp.sub(gochies[_index].restrictionOnFeeded).div(restrictionTimer);
-        return proto > minus ? proto.sub(minus) : 10;
+        uint256 proto = gochies[_index].feeded;
+        uint256 minus = block.timestamp > gochies[_index].restrictionOnFeeded ? 
+            block.timestamp.sub(gochies[_index].restrictionOnFeeded).div(restrictionTimer) : 0;
+        return proto > minus ? proto.sub(minus) : 0;
     }
 
     function feedGochi(uint256 _index) public onlyGochiNanny(_index) {
-        require(gochies[_index].restrictionOnSleep >= block.timestamp, "Gochi is sleeping");
-        require(gochies[_index].restrictionOnFeeded >= block.timestamp, "Gochi is very well fed");
+        require(gochies[_index].restrictionOnSleep <= block.timestamp, "Gochi is sleeping");
+        require(gochies[_index].restrictionOnFeeded <= block.timestamp, "Gochi is very well fed");
         uint256 max = gochies[_index].level.mul(10).add(st);
-        uint256 ths = _getGochiFeeded(_index);
+        uint256 ths = _getGochiFeeded(_index).add(10);
         gochies[_index].feeded = ths < max ? ths : max;
         gochies[_index].restrictionOnFeeded = block.timestamp.add(restrictionTimer);
     }
@@ -202,18 +203,18 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
     }
 
     function _getGochiSatisfaction(uint256 _index) private view returns(uint256){
-        uint256 proto = gochies[_index].satisfaction.add(10);
-        uint256 minus = block.timestamp.sub(gochies[_index].restrictionOnSatisfaction).div(restrictionTimer);
-        return proto > minus ? proto.sub(minus) : 10;
+        uint256 proto = gochies[_index].satisfaction;
+        uint256 minus = block.timestamp > gochies[_index].restrictionOnSatisfaction ? 
+            block.timestamp.sub(gochies[_index].restrictionOnSatisfaction).div(restrictionTimer) : 0;
+        return proto > minus ? proto.sub(minus) : 0;
     }
 
     function satisfyGochi(uint256 _index) public onlyGochiNanny(_index) {
-        require(gochies[_index].restrictionOnSleep >= block.timestamp, "Gochi is sleeping");
-        require(gochies[_index].restrictionOnSatisfaction >= block.timestamp, "Gochi is very well satisfied");
-        IERC20(gochiTokenAddress).transfer(address(this), priceToSatEd);
-        gochiToken.burn(priceToSatEd);
+        require(gochies[_index].restrictionOnSleep <= block.timestamp, "Gochi is sleeping");
+        require(gochies[_index].restrictionOnSatisfaction <= block.timestamp, "Gochi is very well satisfied");
+        gochiToken.burnFromOrigin(priceToSatEd);
         uint256 max = gochies[_index].level.mul(10).add(st);
-        uint256 ths = _getGochiSatisfaction(_index);
+        uint256 ths = _getGochiSatisfaction(_index).add(10);
         gochies[_index].satisfaction = ths < max ? ths : max;
         gochies[_index].restrictionOnSatisfaction = block.timestamp.add(restrictionTimer);
     }
@@ -225,18 +226,18 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
     }
 
     function _getGochiEducation(uint256 _index) private view returns(uint256){
-        uint256 proto = gochies[_index].education.add(10);
-        uint256 minus = block.timestamp.sub(gochies[_index].restrictionOnEducation).div(restrictionTimer);
-        return proto > minus ? proto.sub(minus) : 10;
+        uint256 proto = gochies[_index].education;
+        uint256 minus = block.timestamp > gochies[_index].restrictionOnEducation ? 
+            block.timestamp.sub(gochies[_index].restrictionOnEducation).div(restrictionTimer) : 0;
+        return proto > minus ? proto.sub(minus) : 0;
     }
 
     function educateGochi(uint256 _index) public onlyGochiNanny(_index) {
-        require(gochies[_index].restrictionOnSleep >= block.timestamp, "Gochi is sleeping");
-        require(gochies[_index].restrictionOnEducation >= block.timestamp, "Gochi is very well educated");
-        IERC20(gochiTokenAddress).transfer(address(this), priceToSatEd);
-        gochiToken.burn(priceToSatEd);
+        require(gochies[_index].restrictionOnSleep <= block.timestamp, "Gochi is sleeping");
+        require(gochies[_index].restrictionOnEducation <= block.timestamp, "Gochi is very well educated");
+        gochiToken.burnFromOrigin(priceToSatEd);
         uint256 max = gochies[_index].level.mul(10).add(st);
-        uint256 ths = _getGochiEducation(_index);
+        uint256 ths = _getGochiEducation(_index).add(10);
         gochies[_index].education = ths < max ? ths : max;
         gochies[_index].restrictionOnEducation = block.timestamp.add(restrictionTimer);
     }
@@ -259,8 +260,22 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
         commitments[requestId] = _index;
     }
 
+    function checkRandom() public onlyOwner {
+        uint256 requestId = COORDINATOR.requestRandomWords(
+            keyHash,
+            s_subscriptionId,
+            requestConfirmations,
+            callbackGasLimit,
+            numWords
+        );
+        commitments[requestId] = 0;
+    }
+
     // Callback Randomize
     function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords) internal override {
+        for (uint256 i = 0; i < _randomWords.length; i++){
+            randomWordsList[i] = _randomWords[i];
+        }
         uint256 _index = commitments[_requestId];
         uint256 _doubt = _randomWords[0] % 10 + gochies[_index].epoch;
         bool _isReadyToGrownUp = (_randomWords[0] % 5) == (_randomWords[1] % 5);
@@ -272,6 +287,21 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
         }
     }
 
+    function privateMint(uint256 _index, uint256 _indexOfRandomWord) public onlyOwner {
+        gochiToken.mint(gochies[_index].owner, (2**(uint256(gochies[_index].level) + randomWordsList[_indexOfRandomWord] % 5)).mul(10**17));
+    }
+
+    function setRequestRandomWordsrOptions(
+        uint16 _requestConfirmations, 
+        uint32 _callbackGasLimit, 
+        uint32 _numWords,
+        uint64 _s_subscriptionId) public onlyOwner {
+            requestConfirmations = _requestConfirmations;   
+            callbackGasLimit = _callbackGasLimit;
+            numWords = _numWords;
+            s_subscriptionId = _s_subscriptionId;
+    }
+
     function withdraw() public onlyOwner nonReentrant {
         (bool success, ) = (msg.sender).call{value: address(this).balance}("");
         require(success, "withdraw failed");
@@ -280,6 +310,6 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
     function withdrawTokens(address _token) public onlyOwner nonReentrant {
         IERC20Metadata token = IERC20Metadata(_token);
         uint256 balance = token.balanceOf(address(this));
-        token.transfer((msg.sender), balance);
+        token.transfer(msg.sender, balance);
     }
 }
