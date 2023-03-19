@@ -10,7 +10,7 @@
 *                                                            *
 \************************************************************/                                                  
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.7;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
@@ -32,10 +32,10 @@ contract CryptoGochiToken is ERC20 {
         _;
     }
 
-    constructor() ERC20("CryptoGochiToken", "GOCHI") {
+    constructor() ERC20("CryptoGochiToken", "GCHT") {
         owner = msg.sender;
         minter = msg.sender;
-        uint256 initialSupply = 10 * 10 ** decimals();
+        uint256 initialSupply = 100 * 10 ** decimals();
         _mint(owner, initialSupply);
     }
 

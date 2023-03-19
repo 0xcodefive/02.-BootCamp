@@ -10,7 +10,7 @@
 *                                                            *
 \************************************************************/                                                  
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.7;
 
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
@@ -241,37 +241,45 @@ contract CryptoGochiGame is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
         gochies[_index].restrictionOnEducation = block.timestamp.add(restrictionTimer);
     }
 
-    function gochiMorph(uint256 _index) public onlyGochiOwner(_index) {
+    function gochiMorph(uint256 _index) public onlyGochiNanny(_index) {
         require(_getGochiFeeded(_index) >= 85, "Not fed enough, need more then 85%");
         gochies[_index].epoch++;
         gochies[_index].feeded = gochies[_index].feeded.div(2);
         gochies[_index].satisfaction = gochies[_index].satisfaction.div(2);
         gochies[_index].education = gochies[_index].education.div(2);
         gochies[_index].restrictionOnSleep = block.timestamp.add(restrictionTimer.mul(5));
-
-        if (gochies[_index].epoch < gochies[_index].level.add(10)) {
-            gochiToken.mint(gochies[_index].owner, (2**(uint256(gochies[_index].level))).mul(10**17));
-        } else {
-            uint256 requestId = COORDINATOR.requestRandomWords(
-                keyHash,
-                s_subscriptionId,
-                requestConfirmations,
-                callbackGasLimit,
-                numWords
-            );
-            commitments[requestId] = _index;
-        }
+        
+        uint256 requestId = COORDINATOR.requestRandomWords(
+            keyHash,
+            s_subscriptionId,
+            requestConfirmations,
+            callbackGasLimit,
+            numWords
+        );
+        commitments[requestId] = _index;
     }
 
     // Callback Randomize
     function fulfillRandomWords(uint256 _requestId, uint256[] memory _randomWords) internal override {
         uint256 _index = commitments[_requestId];
         uint256 _doubt = _randomWords[0] % 10 + gochies[_index].epoch;
-        if (_doubt >= uint256(gochies[_index].level).add(20) && _getGochiSatisfaction(_index) >= 85 && _getGochiEducation(_index) >= 85) {
+        bool _isReadyToGrownUp = (_randomWords[0] % 5) == (_randomWords[1] % 5);
+        if (_isReadyToGrownUp && _doubt >= uint256(gochies[_index].level).add(20) && _getGochiSatisfaction(_index) >= 85 && _getGochiEducation(_index) >= 85) {
             gochies[_index].level++;
             emit GochiHasGrownUp(gochies[_index].owner, _index);
         } else {
             gochiToken.mint(gochies[_index].owner, (2**(uint256(gochies[_index].level) + _randomWords[1] % 5)).mul(10**17));
         }
+    }
+
+    function withdraw() public onlyOwner nonReentrant {
+        (bool success, ) = (msg.sender).call{value: address(this).balance}("");
+        require(success, "withdraw failed");
+    }
+
+    function withdrawTokens(address _token) public onlyOwner nonReentrant {
+        IERC20Metadata token = IERC20Metadata(_token);
+        uint256 balance = token.balanceOf(address(this));
+        token.transfer((msg.sender), balance);
     }
 }

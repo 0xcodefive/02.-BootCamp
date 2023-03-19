@@ -10,7 +10,7 @@
 *                                                            *
 \************************************************************/                                                  
 
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.7;
 
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
@@ -335,7 +335,7 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
         pay(address(this), msg.sender, zeroAddress, amountToWithdraw);
     }
 
-    function withdrawTokens(address _token) external onlyOwner nonReentrant {
+    function withdrawTokens(address _token) public onlyOwner nonReentrant {
         IERC20Metadata token = IERC20Metadata(_token);
         require(token.balanceOf(address(this)) > balanceP2PbyToken[_token], "Balance is too small for withdrawal");
         uint256 amountToWithdraw = (token.balanceOf(address(this)).sub(balanceP2PbyToken[_token]));
@@ -353,7 +353,7 @@ contract RSP_game is ReentrancyGuard, VRFConsumerBaseV2, ConfirmedOwner {
         return token.balanceOf(address(this)).sub(balanceP2PbyToken[_token]);
     }
 
-    function pay(address _from, address _to, address _token, uint256 _amount) internal returns(bool) {
+    function pay(address _from, address _to, address _token, uint256 _amount) private returns(bool) {
         if (_token == zeroAddress && _from == address(this)){
             (bool success, ) = _to.call{value: _amount}("");
             return success;
