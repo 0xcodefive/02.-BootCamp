@@ -23,8 +23,8 @@ async function getAttributesArray(){
     const attributesArray = [];
     for(let i = 0; i < 15; i++){
         let uri = `${startUri}${i}.json`;
-        let attribut = await getAttributesFromURI(uri);
-        attributes.push(attribut);
+        let attribute = await getAttributesFromURI(uri);
+        attributesArray.push(attribute);
     }
     return attributesArray;
 }
