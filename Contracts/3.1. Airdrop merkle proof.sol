@@ -10,14 +10,14 @@
 *                                                            *
 \************************************************************/                                                  
 
-pragma solidity ^0.8.7;
+pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol"; 
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
-contract ERC20Airdrop {
+contract ERC20Airdroper {
     using SafeERC20 for IERC20Metadata;
     using SafeMath for uint256;
 
@@ -51,10 +51,10 @@ contract ERC20Airdrop {
         emit NewAirdropCreated(_token, dropAmount);
     }
 
-    function claim(address _token, bytes32[] calldata proof) public {
+    function claim(address _token, bytes32[] calldata _proof) public {
         require(!hasClaimed[_token][msg.sender], "Already claimed");
         (, bytes32 _merkleRoot, uint256 _airdropAmount, uint256 _airdroppedValue) = getAirdropTicker(_token);
-        require(MerkleProof.verify(proof, _merkleRoot, bytes32(uint256(uint160(msg.sender)))), "Invalid proof");
+        require(checkMerkleProof(_merkleRoot, _proof), "Invalid proof");
 
         hasClaimed[_token][msg.sender] = true;
         _airdroppedValue = _airdroppedValue.add(_airdropAmount);
@@ -63,6 +63,11 @@ contract ERC20Airdrop {
         token.safeTransfer(msg.sender, _airdropAmount);
 
         emit Airdrop(msg.sender, _token, _airdropAmount);
+    }
+
+    function checkMerkleProof(bytes32 _merkleRoot, bytes32[] calldata _proof) public view returns(bool){
+        bytes32 _leaf = keccak256(bytes.concat(keccak256(abi.encode(msg.sender, 0))));
+        return MerkleProof.verify(_proof, _merkleRoot, _leaf);
     }
 
     function getAirdropTicker(address _token) public view returns (address, bytes32, uint256, uint256) {

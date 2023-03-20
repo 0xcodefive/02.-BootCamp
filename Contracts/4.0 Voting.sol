@@ -10,9 +10,8 @@
 *                                                            *
 \************************************************************/                                                  
 
-pragma solidity ^0.8.7;
+pragma solidity ^0.8.19;
 
-import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 contract Voting {
@@ -86,7 +85,7 @@ contract Voting {
             owner: _owner,
             topic: _topic,
             isActive: true,
-            minQuorum: 0,
+            minQuorum: 2,
             allVoteCount: 0,
             typeOf: address(this) == _addrForVote ? Types.simple : Types.bySBT,            
             addrForVote: _addrForVote
@@ -95,26 +94,34 @@ contract Voting {
         return sessions.length - 1;
     }
     
-    function castVote(uint sessionId, uint optionIndex) public {
+    function castVoteSimple(uint sessionId, uint optionIndex) public {
         require(sessions.length > sessionId, "Invalid session id");
         require(sessions[sessionId].isActive, "This session is closed");        
         require(optionIndex < options[sessionId].length, "Invalid option index");
-        
-        if (sessions[sessionId].typeOf == Types.bySBT) {
-            require(IERC721(sessions[sessionId].addrForVote).balanceOf(msg.sender) > 0, "No voting rights");            
-            uint256 tokenIndex = IERC721Enumerable(sessions[sessionId].addrForVote).tokenOfOwnerByIndex(msg.sender, 0);
-            require(!hasVotedBySBT[sessionId][tokenIndex], "Your token have already voted");
-            hasVotedBySBT[sessionId][tokenIndex] = true;
-            votesBySBT[sessionId][tokenIndex] = optionIndex;
-        } else {
-            require(!hasVoted[sessionId][msg.sender], "You have already voted");
-            hasVoted[sessionId][msg.sender] = true;
-            votes[sessionId][msg.sender] = optionIndex;
-        }  
-        
+        require(sessions[sessionId].typeOf == Types.simple, "Is not simple session");
+        require(!hasVoted[sessionId][msg.sender], "You have already voted");
+
+        hasVoted[sessionId][msg.sender] = true;
+        votes[sessionId][msg.sender] = optionIndex;        
         options[sessionId][optionIndex].voteCount++;
-        sessions[sessionId].allVoteCount++;
+        sessions[sessionId].allVoteCount++;        
+        emit NewVoteCasted(sessionId, optionIndex, msg.sender);
+    }
+
+    function castVoteBySBT(uint sessionId, uint optionIndex, uint256 tokenIndex) public {
+        require(sessions.length > sessionId, "Invalid session id");
+        require(sessions[sessionId].isActive, "This session is closed");        
+        require(optionIndex < options[sessionId].length, "Invalid option index");
+        require(sessions[sessionId].typeOf == Types.bySBT, "Is not SBT session");
+    
+        IERC721 token = IERC721(sessions[sessionId].addrForVote);
+        require(token.ownerOf(tokenIndex) == msg.sender, "No voting rights");
+        require(!hasVotedBySBT[sessionId][tokenIndex], "Your token have already voted");
         
+        hasVotedBySBT[sessionId][tokenIndex] = true;
+        votesBySBT[sessionId][tokenIndex] = optionIndex;        
+        options[sessionId][optionIndex].voteCount++;
+        sessions[sessionId].allVoteCount++;        
         emit NewVoteCasted(sessionId, optionIndex, msg.sender);
     }
     

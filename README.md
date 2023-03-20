@@ -5,7 +5,53 @@
 npm install ethers@5
 ```
 
-## 03. AirDrop for merkle-tree
+## 2.0. DocumentSignature
 ```
 npm install @openzeppelin/merkle-tree
+```
+
+
+```
+Merkle Root: 0xcabb0480fab768269cbad687daeb228b5a6cb941f49d940634cec322630e6871
+
+Value: (2) ["0xc0de8eff2b9e2b8d38d6db71ab6000c6546647bc", "0"]
+Proof: (2) ["0xa4decd46da4ec90c24328c2a568ba6caa59b0499b8ad82ce212e795838376ecf", "0x2b48478b131fbedf5f728cca4db7bf85b1c0c26e25692e728b2ddce3e93766ee"]
+
+Value: (2) ["0xc0def054dc13c05ddc5fbcff2038924280875827", "0"]
+Proof: (2) ["0x9fd3f09855e49217df74f8ffb608c5198c9af47ffdf732303f92a7c7429cd6c2", "0xa9be0cff5a420d24cb86b17ff7fd6fd7a719d4f768ae1ed087b95acd85268e7a"]
+
+Value: (2) ["0xc0de248619287170d4549392d11686206127089b", "0"]
+Proof: (3) ["0x9cdaeda2e2c0662efcdefea88bd379367f3ce1481ba6b058ed960a7c0f8114b8", "0xefb4cf5e31f475897e9d04c9e5d23e0e2fa5ac28cffd91f58e799d15db413fa6", "0x2b48478b131fbedf5f728cca4db7bf85b1c0c26e25692e728b2ddce3e93766ee"]
+
+Value: (2) ["0xc0dE521BD4015A537496036276Abd2083082a736", "0"]
+Proof: (2) ["0xa49f2205ac2ac59c6152461a05a9ff62877db4a9b80f752be1e09b615f217331", "0xa9be0cff5a420d24cb86b17ff7fd6fd7a719d4f768ae1ed087b95acd85268e7a"]
+
+Value: (2) ["0xC0de5B5cDB7828088A2E48390a38e719E1f1bfed", "0"]
+Proof: (3) ["0x6e478fd59b639b44f2424a5b34bf049996c510c4dc99a070202a9edad1d8a313", "0xefb4cf5e31f475897e9d04c9e5d23e0e2fa5ac28cffd91f58e799d15db413fa6", "0x2b48478b131fbedf5f728cca4db7bf85b1c0c26e25692e728b2ddce3e93766ee"]
+```
+
+## 3.0. Airdrop
+
+## 3.1. Airdrop merkle proof
+```
+npm install @openzeppelin/merkle-tree
+```
+
+```
+Merkle Root: 0xcabb0480fab768269cbad687daeb228b5a6cb941f49d940634cec322630e6871
+
+Value: (2) ["0xc0de8eff2b9e2b8d38d6db71ab6000c6546647bc", "0"]
+Proof: (2) ["0xa4decd46da4ec90c24328c2a568ba6caa59b0499b8ad82ce212e795838376ecf", "0x2b48478b131fbedf5f728cca4db7bf85b1c0c26e25692e728b2ddce3e93766ee"]
+
+Value: (2) ["0xc0def054dc13c05ddc5fbcff2038924280875827", "0"]
+Proof: (2) ["0x9fd3f09855e49217df74f8ffb608c5198c9af47ffdf732303f92a7c7429cd6c2", "0xa9be0cff5a420d24cb86b17ff7fd6fd7a719d4f768ae1ed087b95acd85268e7a"]
+
+Value: (2) ["0xc0de248619287170d4549392d11686206127089b", "0"]
+Proof: (3) ["0x9cdaeda2e2c0662efcdefea88bd379367f3ce1481ba6b058ed960a7c0f8114b8", "0xefb4cf5e31f475897e9d04c9e5d23e0e2fa5ac28cffd91f58e799d15db413fa6", "0x2b48478b131fbedf5f728cca4db7bf85b1c0c26e25692e728b2ddce3e93766ee"]
+
+Value: (2) ["0xc0dE521BD4015A537496036276Abd2083082a736", "0"]
+Proof: (2) ["0xa49f2205ac2ac59c6152461a05a9ff62877db4a9b80f752be1e09b615f217331", "0xa9be0cff5a420d24cb86b17ff7fd6fd7a719d4f768ae1ed087b95acd85268e7a"]
+
+Value: (2) ["0xC0de5B5cDB7828088A2E48390a38e719E1f1bfed", "0"]
+Proof: (3) ["0x6e478fd59b639b44f2424a5b34bf049996c510c4dc99a070202a9edad1d8a313", "0xefb4cf5e31f475897e9d04c9e5d23e0e2fa5ac28cffd91f58e799d15db413fa6", "0x2b48478b131fbedf5f728cca4db7bf85b1c0c26e25692e728b2ddce3e93766ee"]
 ```

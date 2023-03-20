@@ -28,7 +28,7 @@ contract CryptoGochiToken is ERC20 {
     }
 
     modifier onlyMinter{
-        require(msg.sender == minter, "Only owner!");
+        require(msg.sender == minter, "Only minter!");
         _;
     }
 
@@ -39,7 +39,7 @@ contract CryptoGochiToken is ERC20 {
         _mint(owner, initialSupply);
     }
 
-    function mint(address account, uint256 amount) internal onlyMinter {
+    function mint(address account, uint256 amount) external onlyMinter {
         _mint(account, amount);
     }
 

@@ -10,7 +10,7 @@
 *                                                            *
 \************************************************************/                                                  
 
-pragma solidity ^0.8.7;
+pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -38,6 +38,11 @@ contract DocumentSignature is ERC721, ReentrancyGuard {
         merkleRoot = _merkleRoot;
     }
 
+    function checkMerkleProof(bytes32[] calldata proof) public view returns(bool){
+        bytes32 leaf = keccak256(bytes.concat(keccak256(abi.encode(msg.sender, 0))));
+        return MerkleProof.verify(proof, merkleRoot, leaf);
+    }
+
     function createProposal(string memory _documentLink) public payable {
         require(msg.value >= 10**15, "Your offer should be more than 0.001 BNB");
         proposals.push(Proposal({signed: false, creator: msg.sender, signatory: zeroAddress, documentLink: _documentLink, amount: msg.value}));
@@ -46,7 +51,7 @@ contract DocumentSignature is ERC721, ReentrancyGuard {
 
     function signByIndex(uint256 index, bytes32[] calldata proof) public {
         require(!isSigned(index), "Already signed");
-        require(MerkleProof.verify(proof, merkleRoot, bytes32(uint256(uint160(msg.sender)))), "Invalid proof");
+        require(checkMerkleProof(proof), "Invalid proof");
         proposals[index].signed = true;
         proposals[index].signatory = msg.sender;
         _safeMint(proposals[index].creator, index);
