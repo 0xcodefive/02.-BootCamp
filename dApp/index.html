@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>NFT dApp</title>
+	<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script type="application/javascript" src="https://cdn.ethers.io/lib/ethers-5.2.umd.min.js"></script>
+    <script src="fn.js"></script>
+	<script>
+		$(document).ready(function() {
+			var collection = await getAttributesArray();
+
+			function displayCollection(type) {
+				var tableBody = $("#collectionTable tbody");
+				tableBody.empty();
+
+				for (var i = 0; i < collection.length; i++) {
+					if (type == "all" || type == "image" && collection[i].image || type == "name" && collection[i].name || type == "program" && collection[i].program || type == "grade" && collection[i].grade) {
+						var row = $("<tr>");
+						row.append($("<td>").html("<img src='" + collection[i].image + "' width='50px'>"));
+						row.append($("<td>").text(collection[i].traits[0].value));
+						row.append($("<td>").text(collection[i].traits[1].value));
+						row.append($("<td>").text(collection[i].traits[2].value));
+						tableBody.append(row);
+					}
+				}
+			}
+
+			$("#filterType").on("change", function() {
+				displayCollection($(this).val());
+			});
+
+			displayCollection("all");
+		});
+	</script>
+</head>
+<body>
+	<h1>Таблица коллекции NFT</h1>
+	<label>Фильтр по типу атрибутов:</label>
+	<select id="filterType">
+		<option value="all">Все</option>
+		<option value="name">Имя</option>
+		<option value="program">Направление</option>
+		<option value="grade">Категория</option>
+	</select>
+	<table id="collectionTable">
+		<thead>
+			<tr>
+				<th>Картинка</th>
+                <th>Имя</th>
+			    <th>Направление</th>
+			    <th>Категория</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Здесь будет отображаться таблица со NFT -->
+        </tbody>
+    </table>
+</body>
+</html>
