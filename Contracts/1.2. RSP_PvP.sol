@@ -46,10 +46,10 @@ contract RSP_game_PvP is ReentrancyGuard {
     event TransferedOwnership(address indexed fromAddr, address toAddr);
     event FeeChanged(uint256 oldFee, uint256 newFee, address owner);
     event NftContractChanged(address oldNFT, address newNFT, address owner);
-    event GamePvPisOpen(address indexed player, address token);
-    event GamePvPisPlayed(address indexed player_1, address indexed player_2);
-    event GamePvPisClosed(address indexed winner, address token);
-    event GamePvPisCancelled(address indexed creator, address token);
+    event GamePvPisOpen(address indexed player, address token, uint256 gameIndex);
+    event GamePvPisPlayed(address indexed player_1, address indexed player_2, uint256 gameIndex);
+    event GamePvPisClosed(address indexed winner, address indexed token, uint256 gameIndex);
+    event GamePvPisCancelled(address indexed creator, address indexed token, uint256 gameIndex);
 
     constructor() payable {
         owner = msg.sender;
@@ -108,7 +108,7 @@ contract RSP_game_PvP is ReentrancyGuard {
             (block.timestamp).add(blocksToGameOver) 
         ));
         balancePvPbyToken[zeroAddress] = balancePvPbyToken[zeroAddress].add(msg.value);
-        emit GamePvPisOpen(msg.sender, zeroAddress);
+        emit GamePvPisOpen(msg.sender, zeroAddress, gamesPvP.length - 1);
     }
 
     // Создаем открыю игру PvP на пользовательском токене
@@ -129,7 +129,7 @@ contract RSP_game_PvP is ReentrancyGuard {
             (block.timestamp).add(blocksToGameOver)
         ));
         balancePvPbyToken[_token] = balancePvPbyToken[_token].add(_amount);
-        emit GamePvPisOpen(msg.sender, zeroAddress);
+        emit GamePvPisOpen(msg.sender, _token, gamesPvP.length - 1);
     }
 
     // Играем в ранее созданную первую в списке открытую игру на BNB
@@ -174,7 +174,7 @@ contract RSP_game_PvP is ReentrancyGuard {
         gamesPvP[_index].player_2 = msg.sender;
         gamesPvP[_index].choice_2 = _choice;
         gamesPvP[_index].timeGameOver = (block.timestamp).add(blocksToGameOver);
-        emit GamePvPisPlayed(gamesPvP[_index].player_1, msg.sender);
+        emit GamePvPisPlayed(gamesPvP[_index].player_1, msg.sender, _index);
     }
 
     // Получаем индекс сыгранной но не закрытой игры по пользователю
@@ -217,7 +217,7 @@ contract RSP_game_PvP is ReentrancyGuard {
             uint256 transferAmount = (gamesPvP[i].balance).mul(2).sub(feeAmount);
             _withdraw(gamesPvP[i].player_2, gamesPvP[i].token, transferAmount);
         }
-        emit GamePvPisClosed(gamesPvP[i].winner, gamesPvP[i].token); 
+        emit GamePvPisClosed(gamesPvP[i].winner, gamesPvP[i].token, i); 
     }
 
     // Отменяем несыгранную игру
@@ -230,7 +230,7 @@ contract RSP_game_PvP is ReentrancyGuard {
         gamesPvP[i].winner = gamesPvP[i].player_1;
         uint256 transferAmount = (gamesPvP[i].balance);
         _withdraw(gamesPvP[i].player_1, gamesPvP[i].token, transferAmount);
-        emit GamePvPisCancelled(gamesPvP[i].winner, gamesPvP[i].token); 
+        emit GamePvPisCancelled(gamesPvP[i].winner, gamesPvP[i].token, i); 
     }
     // === Player to Player game === end
 
